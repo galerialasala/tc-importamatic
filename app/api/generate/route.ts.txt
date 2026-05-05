@@ -1,0 +1,61 @@
+import { GoogleGenAI } from '@google/genai'
+
+const ai = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+})
+
+function extractJson(text: string) {
+  const cleaned = text.replace(/```json/g, '').replace(/```/g, '').trim()
+  const first = cleaned.indexOf('{')
+  const last = cleaned.lastIndexOf('}')
+  return JSON.parse(cleaned.slice(first, last + 1))
+}
+
+export async function POST(req: Request) {
+  try {
+    const { images } = await req.json()
+
+    const prompt = `
+Actúa como un anticuario profesional experto en Todocolección.
+
+Analiza las imágenes (son URLs) y genera:
+
+1. Título (máx 65 caracteres)
+2. Descripción natural, humana, breve
+3. Sección (solo número realista de TC)
+
+Reglas:
+- Español de España
+- No inventes datos
+- No uses listas
+- No uses palabras como "posiblemente"
+- No describas lo obvio
+
+Devuelve SOLO JSON:
+{
+  "title": "...",
+  "description": "...",
+  "section": "123"
+}
+
+Imágenes:
+${images.join('\n')}
+`
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: prompt,
+    })
+
+    const parsed = extractJson(response.text || '')
+
+    return Response.json({
+      title: parsed.title || '',
+      description: parsed.description || '',
+      section: parsed.section || '',
+    })
+
+  } catch (e) {
+    return Response.json({ error: 'Error IA' }, { status: 500 })
+  }
+}
