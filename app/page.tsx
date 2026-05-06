@@ -90,10 +90,10 @@ export default function Home() {
         const data = await res.json()
 
         if (!res.ok || !data.url) {
-          alert('Error subiendo una imagen')
-          setUploading(false)
-          return
-        }
+  alert(data.error || 'Error subiendo una imagen')
+  setUploading(false)
+  return
+}
 
         uploadedUrls.push(data.url)
       }
@@ -259,13 +259,43 @@ export default function Home() {
           Estado 3 · Envío Otros · Gastos fijos editable
         </p>
 
-        <input
-          type="file"
-          multiple
-          accept="image/*"
-          onChange={(e) => uploadPhotos(e.target.files)}
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
-        />
+       <label
+  style={{
+    display: 'block',
+    width: '100%',
+    padding: 16,
+    marginBottom: 12,
+    background: '#111',
+    color: 'white',
+    textAlign: 'center',
+    borderRadius: 8,
+    fontWeight: 'bold',
+    cursor: 'pointer',
+  }}
+>
+  📸 Subir fotos
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    capture="environment"
+    onChange={(e) => uploadPhotos(e.target.files)}
+    style={{ display: 'none' }}
+  />
+</label>
+
+{images.filter(Boolean).length > 0 && (
+  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
+    {images.filter(Boolean).map((img, index) => (
+      <img
+        key={index}
+        src={img}
+        alt={`Foto ${index + 1}`}
+        style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6 }}
+      />
+    ))}
+  </div>
+)}
 
         {uploading && <p>Subiendo fotos...</p>}
 

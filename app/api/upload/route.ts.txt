@@ -1,37 +1,22 @@
-import { put } from "@vercel/blob";
-import { NextResponse } from "next/server";
+import { put } from '@vercel/blob'
+import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const formData = await req.formData();
-    const file = formData.get("file") as File;
+    const formData = await req.formData()
+    const file = formData.get('file') as File | null
 
     if (!file) {
-      return NextResponse.json(
-        { error: "No file uploaded" },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'No se ha recibido ningún archivo' }, { status: 400 })
     }
 
-    const blob = await put(
-      `fotos/${Date.now()}-${file.name}`,
-      file,
-      {
-        access: "public",
-      }
-    );
+    const blob = await put(`fotos/${Date.now()}-${file.name}`, file, {
+      access: 'public',
+    })
 
-    return NextResponse.json({
-      success: true,
-      url: blob.url,
-    });
-
+    return NextResponse.json({ url: blob.url })
   } catch (error) {
-    console.error(error);
-
-    return NextResponse.json(
-      { error: "Upload failed" },
-      { status: 500 }
-    );
+    console.error(error)
+    return NextResponse.json({ error: 'Fallo real subiendo a Vercel Blob' }, { status: 500 })
   }
 }
