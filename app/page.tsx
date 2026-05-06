@@ -202,12 +202,33 @@ export default function Home() {
           Estado 3 · Envío Otros · Gastos fijos 6,50 €
         </p>
 
-        <textarea
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
-          placeholder="Pega aquí las URLs de imágenes, una por línea o separadas por comas"
-          value={bulkImages}
-          onChange={(e) => handleBulkImages(e.target.value)}
-        />
+       <input
+  type="file"
+  multiple
+  accept="image/*"
+  onChange={async (e) => {
+    const files = Array.from(e.target.files || [])
+
+    const uploadedUrls: string[] = []
+
+    for (const file of files) {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+
+      uploadedUrls.push(data.url)
+    }
+
+    setImageUrls(uploadedUrls.join('\n'))
+  }}
+  className="w-full border rounded p-3"
+/>
 
         <button
           onClick={generateAI}
