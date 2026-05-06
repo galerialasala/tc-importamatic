@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import imageCompression from 'browser-image-compression'
 
 type Item = {
   title: string
@@ -79,8 +80,15 @@ export default function Home() {
       const uploadedUrls: string[] = []
 
       for (const file of Array.from(files).slice(0, 10)) {
+        const compressedFile = await imageCompression(file, {
+          maxSizeMB: 1.2,
+          maxWidthOrHeight: 1600,
+          useWebWorker: true,
+          fileType: 'image/jpeg',
+        })
+
         const formData = new FormData()
-        formData.append('file', file)
+        formData.append('file', compressedFile, file.name.replace(/\.[^/.]+$/, '') + '.jpg')
 
         const res = await fetch('/api/upload', {
           method: 'POST',
@@ -90,10 +98,10 @@ export default function Home() {
         const data = await res.json()
 
         if (!res.ok || !data.url) {
-  alert(data.error || 'Error subiendo una imagen')
-  setUploading(false)
-  return
-}
+          alert(data.error || 'Error subiendo una imagen')
+          setUploading(false)
+          return
+        }
 
         uploadedUrls.push(data.url)
       }
@@ -259,45 +267,57 @@ export default function Home() {
           Estado 3 · Envío Otros · Gastos fijos editable
         </p>
 
-       <label
-  style={{
-    display: 'block',
-    width: '100%',
-    padding: 16,
-    marginBottom: 12,
-    background: '#111',
-    color: 'white',
-    textAlign: 'center',
-    borderRadius: 8,
-    fontWeight: 'bold',
-    cursor: 'pointer',
-  }}
->
-  📸 Subir fotos
-  <input
-    type="file"
-    multiple
-    accept="image/*"
-    capture="environment"
-    onChange={(e) => uploadPhotos(e.target.files)}
-    style={{ display: 'none' }}
-  />
-</label>
+        <label
+          style={{
+            display: 'block',
+            width: '100%',
+            padding: 16,
+            marginBottom: 12,
+            background: '#111',
+            color: 'white',
+            textAlign: 'center',
+            borderRadius: 8,
+            fontWeight: 'bold',
+            cursor: 'pointer',
+          }}
+        >
+          📸 Subir fotos
+          <input
+            type="file"
+            multiple
+            accept="image/*"
+            capture="environment"
+            onChange={(e) => uploadPhotos(e.target.files)}
+            style={{ display: 'none' }}
+          />
+        </label>
 
-{images.filter(Boolean).length > 0 && (
-  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
-    {images.filter(Boolean).map((img, index) => (
-      <img
-        key={index}
-        src={img}
-        alt={`Foto ${index + 1}`}
-        style={{ width: '100%', height: 90, objectFit: 'cover', borderRadius: 6 }}
-      />
-    ))}
-  </div>
-)}
+        {uploading && <p>Comprimiendo y subiendo fotos...</p>}
 
-        {uploading && <p>Subiendo fotos...</p>}
+        {images.filter(Boolean).length > 0 && (
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(5, 1fr)',
+              gap: 8,
+              marginBottom: 12,
+            }}
+          >
+            {images.filter(Boolean).map((img, index) => (
+              <img
+                key={index}
+                src={img}
+                alt={`Foto ${index + 1}`}
+                style={{
+                  width: '100%',
+                  height: 90,
+                  objectFit: 'cover',
+                  borderRadius: 6,
+                }}
+              />
+            ))}
+          </div>
+        )}
 
         <textarea
           style={{ width: '100%', padding: 12, marginBottom: 12 }}
