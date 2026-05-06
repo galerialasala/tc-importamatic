@@ -7,6 +7,7 @@ type Item = {
   description: string
   section: string
   images: string[]
+  shippingCost: string
 }
 
 const DESCRIPTION_SUFFIX =
@@ -24,9 +25,11 @@ export default function Home() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [section, setSection] = useState('')
+  const [shippingCost, setShippingCost] = useState('6,50')
   const [images, setImages] = useState<string[]>(Array(10).fill(''))
   const [bulkImages, setBulkImages] = useState('')
   const [loadingAI, setLoadingAI] = useState(false)
+  const [uploading, setUploading] = useState(false)
 
   const clean = (value: string, max?: number) => {
     const cleaned = value
@@ -40,6 +43,15 @@ export default function Home() {
 
   const finalDescription = (text: string) =>
     clean(text + '\n\n' + DESCRIPTION_SUFFIX, 1000)
+
+  const setImagesFromUrls = (urls: string[]) => {
+    const filled = Array(10).fill('')
+    urls.slice(0, 10).forEach((url, i) => {
+      filled[i] = url
+    })
+    setImages(filled)
+    setBulkImages(urls.slice(0, 10).join('\n'))
+  }
 
   const handleBulkImages = (text: string) => {
     setBulkImages(text)
@@ -58,15 +70,52 @@ export default function Home() {
     setImages(filled)
   }
 
+  const uploadPhotos = async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+
+    setUploading(true)
+
+    try {
+      const uploadedUrls: string[] = []
+
+      for (const file of Array.from(files).slice(0, 10)) {
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        })
+
+        const data = await res.json()
+
+        if (!res.ok || !data.url) {
+          alert('Error subiendo una imagen')
+          setUploading(false)
+          return
+        }
+
+        uploadedUrls.push(data.url)
+      }
+
+      setImagesFromUrls(uploadedUrls)
+    } catch {
+      alert('Error subiendo fotos')
+    } finally {
+      setUploading(false)
+    }
+  }
+
   const updateImage = (index: number, value: string) => {
     const updated = [...images]
     updated[index] = value
     setImages(updated)
+    setBulkImages(updated.filter(Boolean).join('\n'))
   }
 
   const generateAI = async () => {
     if (!images[0]) {
-      alert('Primero pega al menos una imagen')
+      alert('Primero sube o pega al menos una imagen')
       return
     }
 
@@ -76,9 +125,7 @@ export default function Home() {
       const res = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          images: images.filter(Boolean),
-        }),
+        body: JSON.stringify({ images: images.filter(Boolean) }),
       })
 
       const data = await res.json()
@@ -119,11 +166,21 @@ export default function Home() {
       return
     }
 
-    setItems([...items, { title, description, section, images }])
+    setItems([
+      ...items,
+      {
+        title,
+        description,
+        section,
+        images,
+        shippingCost,
+      },
+    ])
 
     setTitle('')
     setDescription('')
     setSection('')
+    setShippingCost('6,50')
     setImages(Array(10).fill(''))
     setBulkImages('')
   }
@@ -168,7 +225,7 @@ export default function Home() {
       'Ver imágenes',
       ...item.images.map((img) => clean(img, 100)),
       'Otros',
-      '6,50',
+      clean(item.shippingCost, 100),
     ])
 
     const csv = [header, ...rows].map((row) => row.join('#')).join('\n')
@@ -199,36 +256,25 @@ export default function Home() {
 
         <p>
           Referencia correlativa · Venta directa 100 € · Salida subasta 0,01 € ·
-          Estado 3 · Envío Otros · Gastos fijos 6,50 €
+          Estado 3 · Envío Otros · Gastos fijos editable
         </p>
 
-       <input
-  type="file"
-  multiple
-  accept="image/*"
-  onChange={async (e) => {
-    const files = Array.from(e.target.files || [])
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={(e) => uploadPhotos(e.target.files)}
+          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+        />
 
-    const uploadedUrls: string[] = []
+        {uploading && <p>Subiendo fotos...</p>}
 
-    for (const file of files) {
-      const formData = new FormData()
-      formData.append('file', file)
-
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      })
-
-      const data = await res.json()
-
-      uploadedUrls.push(data.url)
-    }
-
-    setImageUrls(uploadedUrls.join('\n'))
-  }}
-  className="w-full border rounded p-3"
-/>
+        <textarea
+          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+          placeholder="También puedes pegar URLs de imágenes, una por línea o separadas por comas"
+          value={bulkImages}
+          onChange={(e) => handleBulkImages(e.target.value)}
+        />
 
         <button
           onClick={generateAI}
@@ -266,6 +312,13 @@ export default function Home() {
           placeholder="Sección numérica"
           value={section}
           onChange={(e) => setSection(e.target.value)}
+        />
+
+        <input
+          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+          placeholder="Gastos fijos"
+          value={shippingCost}
+          onChange={(e) => setShippingCost(e.target.value)}
         />
 
         {images.map((image, index) => (
@@ -323,7 +376,7 @@ export default function Home() {
             }}
           >
             <strong>{index + 1}</strong> · {item.title} · Sección {item.section} ·{' '}
-            {item.images.filter(Boolean).length} fotos
+            {item.images.filter(Boolean).length} fotos · Gastos fijos {item.shippingCost} €
           </div>
         ))}
       </div>
