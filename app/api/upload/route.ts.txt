@@ -1,22 +1,31 @@
-import { put } from '@vercel/blob'
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextResponse } from 'next/server'
 
-export async function POST(req: Request) {
+export async function POST(request: Request): Promise<NextResponse> {
+  const body = (await request.json()) as HandleUploadBody
+
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-
-    if (!file) {
-      return NextResponse.json({ error: 'No se ha recibido ningún archivo' }, { status: 400 })
-    }
-
-    const blob = await put(`fotos/${Date.now()}-${file.name}`, file, {
-      access: 'public',
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async () => ({
+        allowedContentTypes: [
+          'image/jpeg',
+          'image/png',
+          'image/webp',
+          'image/heic',
+          'image/heif',
+        ],
+        tokenPayload: JSON.stringify({}),
+      }),
+      onUploadCompleted: async () => {},
     })
 
-    return NextResponse.json({ url: blob.url })
+    return NextResponse.json(jsonResponse)
   } catch (error) {
-    console.error(error)
-    return NextResponse.json({ error: 'Fallo real subiendo a Vercel Blob' }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Error upload' },
+      { status: 400 }
+    )
   }
 }

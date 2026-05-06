@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import imageCompression from 'browser-image-compression'
+import { upload } from '@vercel/blob/client'
 
 type Item = {
   title: string
@@ -47,11 +48,13 @@ export default function Home() {
 
   const setImagesFromUrls = (urls: string[]) => {
     const filled = Array(10).fill('')
+
     urls.slice(0, 10).forEach((url, i) => {
       filled[i] = url
     })
+
     setImages(filled)
-    setBulkImages(urls.slice(0, 10).join('\n'))
+    setBulkImages(urls.join('\n'))
   }
 
   const handleBulkImages = (text: string) => {
@@ -63,12 +66,7 @@ export default function Home() {
       .filter(Boolean)
       .slice(0, 10)
 
-    const filled = Array(10).fill('')
-    urls.forEach((url, i) => {
-      filled[i] = url
-    })
-
-    setImages(filled)
+    setImagesFromUrls(urls)
   }
 
   const uploadPhotos = async (files: FileList | null) => {
@@ -80,36 +78,41 @@ export default function Home() {
       const uploadedUrls: string[] = []
 
       for (const file of Array.from(files).slice(0, 10)) {
-        const compressedFile = await imageCompression(file, {
-          maxSizeMB: 1.2,
-          maxWidthOrHeight: 1600,
-          useWebWorker: true,
-          fileType: 'image/jpeg',
-        })
+        let fileToUpload: File | Blob = file
+        let fileName = file.name
 
-        const formData = new FormData()
-        formData.append('file', compressedFile, file.name.replace(/\.[^/.]+$/, '') + '.jpg')
+        try {
+          const compressedFile = await imageCompression(file, {
+            maxSizeMB: 1.2,
+            maxWidthOrHeight: 1600,
+            useWebWorker: true,
+            fileType: 'image/jpeg',
+          })
 
-        const res = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData,
-        })
-
-        const data = await res.json()
-
-        if (!res.ok || !data.url) {
-          alert(data.error || 'Error subiendo una imagen')
-          setUploading(false)
-          return
+          fileToUpload = compressedFile
+          fileName =
+            file.name.replace(/\.[^/.]+$/, '') + '.jpg'
+        } catch {
+          fileToUpload = file
         }
 
-        uploadedUrls.push(data.url)
+        const blob = await upload(
+          `fotos/${Date.now()}-${fileName}`,
+          fileToUpload,
+          {
+            access: 'public',
+            handleUploadUrl: '/api/upload',
+          }
+        )
+
+        uploadedUrls.push(blob.url)
       }
 
       setImagesFromUrls(uploadedUrls)
-    } catch {
-      alert('Error subiendo fotos')
-    } finally {
+} catch (error) {
+  console.error(error)
+  alert(JSON.stringify(error))
+} finally {
       setUploading(false)
     }
   }
@@ -132,8 +135,12 @@ export default function Home() {
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ images: images.filter(Boolean) }),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          images: images.filter(Boolean),
+        }),
       })
 
       const data = await res.json()
@@ -155,7 +162,9 @@ export default function Home() {
 
   const addItem = () => {
     if (!title || !description || !section || !images[0]) {
-      alert('Faltan título, descripción, sección o imagen principal')
+      alert(
+        'Faltan título, descripción, sección o imagen principal'
+      )
       return
     }
 
@@ -165,7 +174,9 @@ export default function Home() {
     }
 
     if (finalDescription(description).length > 1000) {
-      alert('La descripción final supera los 1.000 caracteres')
+      alert(
+        'La descripción final supera los 1.000 caracteres'
+      )
       return
     }
 
@@ -236,21 +247,34 @@ export default function Home() {
       clean(item.shippingCost, 100),
     ])
 
-    const csv = [header, ...rows].map((row) => row.join('#')).join('\n')
+    const csv = [header, ...rows]
+      .map((row) => row.join('#'))
+      .join('\n')
+
     const blob = new Blob(['\ufeff' + csv], {
       type: 'text/csv;charset=utf-8;',
     })
 
     const url = URL.createObjectURL(blob)
+
     const a = document.createElement('a')
     a.href = url
-    a.download = 'subastas_extraordinarias_importamatic.csv'
+    a.download =
+      'subastas_extraordinarias_importamatic.csv'
+
     a.click()
+
     URL.revokeObjectURL(url)
   }
 
   return (
-    <main style={{ minHeight: '100vh', background: '#f3f3f3', padding: 24 }}>
+    <main
+      style={{
+        minHeight: '100vh',
+        background: '#f3f3f3',
+        padding: 24,
+      }}
+    >
       <div
         style={{
           maxWidth: 1000,
@@ -263,8 +287,9 @@ export default function Home() {
         <h1>Importamatic Subastas Extraordinarias</h1>
 
         <p>
-          Referencia correlativa · Venta directa 100 € · Salida subasta 0,01 € ·
-          Estado 3 · Envío Otros · Gastos fijos editable
+          Referencia correlativa · Venta directa 100 € ·
+          Salida subasta 0,01 € · Estado 3 · Envío Otros ·
+          Gastos fijos editable
         </p>
 
         <label
@@ -282,48 +307,62 @@ export default function Home() {
           }}
         >
           📸 Subir fotos
+
           <input
             type="file"
             multiple
             accept="image/*"
             capture="environment"
-            onChange={(e) => uploadPhotos(e.target.files)}
+            onChange={(e) =>
+              uploadPhotos(e.target.files)
+            }
             style={{ display: 'none' }}
           />
         </label>
 
-        {uploading && <p>Comprimiendo y subiendo fotos...</p>}
+        {uploading && (
+          <p>Comprimiendo y subiendo fotos...</p>
+        )}
 
         {images.filter(Boolean).length > 0 && (
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(5, 1fr)',
+              gridTemplateColumns:
+                'repeat(5, 1fr)',
               gap: 8,
               marginBottom: 12,
             }}
           >
-            {images.filter(Boolean).map((img, index) => (
-              <img
-                key={index}
-                src={img}
-                alt={`Foto ${index + 1}`}
-                style={{
-                  width: '100%',
-                  height: 90,
-                  objectFit: 'cover',
-                  borderRadius: 6,
-                }}
-              />
-            ))}
+            {images
+              .filter(Boolean)
+              .map((img, index) => (
+                <img
+                  key={index}
+                  src={img}
+                  alt={`Foto ${index + 1}`}
+                  style={{
+                    width: '100%',
+                    height: 90,
+                    objectFit: 'cover',
+                    borderRadius: 6,
+                  }}
+                />
+              ))}
           </div>
         )}
 
         <textarea
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
-          placeholder="También puedes pegar URLs de imágenes, una por línea o separadas por comas"
+          style={{
+            width: '100%',
+            padding: 12,
+            marginBottom: 12,
+          }}
+          placeholder="También puedes pegar URLs de imágenes"
           value={bulkImages}
-          onChange={(e) => handleBulkImages(e.target.value)}
+          onChange={(e) =>
+            handleBulkImages(e.target.value)
+          }
         />
 
         <button
@@ -331,7 +370,9 @@ export default function Home() {
           disabled={loadingAI}
           style={{
             padding: 14,
-            background: loadingAI ? '#999' : '#1a73e8',
+            background: loadingAI
+              ? '#999'
+              : '#1a73e8',
             color: 'white',
             border: 0,
             borderRadius: 8,
@@ -340,52 +381,72 @@ export default function Home() {
             fontWeight: 'bold',
           }}
         >
-          {loadingAI ? 'Generando con IA...' : 'Generar con IA'}
+          {loadingAI
+            ? 'Generando con IA...'
+            : 'Generar con IA'}
         </button>
 
         <input
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+          style={{
+            width: '100%',
+            padding: 12,
+            marginBottom: 12,
+          }}
           placeholder="Título máximo 100 caracteres"
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) =>
+            setTitle(e.target.value)
+          }
         />
 
         <textarea
-          style={{ width: '100%', padding: 12, marginBottom: 12, minHeight: 120 }}
-          placeholder="Descripción máximo 1.000 caracteres incluyendo texto fijo"
+          style={{
+            width: '100%',
+            padding: 12,
+            marginBottom: 12,
+            minHeight: 120,
+          }}
+          placeholder="Descripción máximo 1.000 caracteres"
           value={description}
-          onChange={(e) => setDescription(e.target.value)}
+          onChange={(e) =>
+            setDescription(e.target.value)
+          }
         />
 
         <input
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+          style={{
+            width: '100%',
+            padding: 12,
+            marginBottom: 12,
+          }}
           placeholder="Sección numérica"
           value={section}
-          onChange={(e) => setSection(e.target.value)}
+          onChange={(e) =>
+            setSection(e.target.value)
+          }
         />
 
         <input
-          style={{ width: '100%', padding: 12, marginBottom: 12 }}
+          style={{
+            width: '100%',
+            padding: 12,
+            marginBottom: 12,
+          }}
           placeholder="Gastos fijos"
           value={shippingCost}
-          onChange={(e) => setShippingCost(e.target.value)}
+          onChange={(e) =>
+            setShippingCost(e.target.value)
+          }
         />
 
-        {images.map((image, index) => (
-          <input
-            key={index}
-            style={{ width: '100%', padding: 10, marginBottom: 8 }}
-            placeholder={
-              index === 0
-                ? 'Imagen 1 principal URL'
-                : `Imagen ${index + 1} URL`
-            }
-            value={image}
-            onChange={(e) => updateImage(index, e.target.value)}
-          />
-        ))}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns:
+              '1fr 1fr',
+            gap: 12,
+          }}
+        >
           <button
             onClick={addItem}
             style={{
@@ -413,7 +474,9 @@ export default function Home() {
           </button>
         </div>
 
-        <h2 style={{ marginTop: 24 }}>Lotes añadidos: {items.length}</h2>
+        <h2 style={{ marginTop: 24 }}>
+          Lotes añadidos: {items.length}
+        </h2>
 
         {items.map((item, index) => (
           <div
@@ -425,8 +488,11 @@ export default function Home() {
               borderRadius: 8,
             }}
           >
-            <strong>{index + 1}</strong> · {item.title} · Sección {item.section} ·{' '}
-            {item.images.filter(Boolean).length} fotos · Gastos fijos {item.shippingCost} €
+            <strong>{index + 1}</strong> ·{' '}
+            {item.title} · Sección {item.section} ·{' '}
+            {item.images.filter(Boolean).length}{' '}
+            fotos · Gastos fijos{' '}
+            {item.shippingCost} €
           </div>
         ))}
       </div>
