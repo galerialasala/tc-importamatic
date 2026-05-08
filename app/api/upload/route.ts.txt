@@ -1,14 +1,22 @@
 import { put } from '@vercel/blob'
 import { NextResponse } from 'next/server'
 
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    const form = await request.formData()
-    const file = form.get('file') as File
+    const formData = await req.formData()
+    const file = formData.get('file') as File | null
 
     if (!file) {
       return NextResponse.json(
-        { error: 'No file received' },
+        { error: 'No se recibió archivo' },
+        { status: 400 }
+      )
+    }
+
+    // aceptar cualquier imagen (incluido HEIC iPhone)
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json(
+        { error: `Formato no permitido: ${file.type}` },
         { status: 400 }
       )
     }
@@ -21,9 +29,11 @@ export async function POST(request: Request) {
       url: blob.url,
     })
   } catch (error: any) {
+    console.error('UPLOAD ERROR:', error)
+
     return NextResponse.json(
       {
-        error: error?.message || 'Upload error',
+        error: error?.message || 'Error interno upload',
       },
       { status: 500 }
     )
